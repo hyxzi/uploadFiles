@@ -24,12 +24,15 @@
     // 未上传的分片
     let pendingChunks = []
     // 初始化页面
-    await init()
+    init()
     // 文件上传事件
-    function upload () {
-      document.getElementById('input').addEventListener('change', async function(e) {
-        // 获取上传的文件对象
-        var file = e.target.files[0];
+    document.getElementById('input').addEventListener('change', function(e) {
+      upload(e);
+    });
+    async function upload (e) {
+      // 获取上传的文件对象
+      var file = e.target.files[0];
+        localStorage.setItem('name', file.name)
         // 定义一个数组
         // 文件切片大小5M
         const maxSize = 1024 * 1024 * 5;
@@ -51,13 +54,13 @@
         } else {
           uploadedChunks = await checkUploadedChunks(fileHash, file.name)
         }
-      });
     }
     
     // 初始化页面
     async function init () {
+      let name = localStorage.getItem('name') || '';
       // 查询已上传的分片
-      let uploadedChunks = await checkUploadedChunks(fileHash, file.name)
+      let uploadedChunks = await checkUploadedChunks(fileHash, name)
       // 只上传未完成的分片
       pendingChunks = fileArr.filter((_, index) => !uploadedChunks.includes(index));
       // 如果有未上传的分片，则进行继续上传
