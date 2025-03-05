@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+  </head>
+  <body>
+    <input type="file" id="input">
+  </body>
+  <script src="https://cdn.bootcdn.net/ajax/libs/spark-md5/3.0.2/spark-md5.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+
+  <script>
+    // 文件上传接口
+    const url = 'http://localhost:3000/upload';
+    // 查询上传进度接口
+    const checkUrl = 'http://localhost:3000/check-upload';
+    // 合并分片的接口
+    const mergeUrl = 'http://localhost:3000/merge-upload';
+    // 文件是否全部上传成功
+    let allSuccessful = false
+    // 文件hash值数组
+    let fileHash
+    // 文件对象
+    var fileArr = [];
+    // 未上传的分片
+    let pendingChunks = []
+    // 初始化页面
+    await init()
+    // 文件上传事件
+    function upload () {
+      document.getElementById('input').addEventListener('change', async function(e) {
+        // 获取上传的文件对象
+        var file = e.target.files[0];
+        // 定义一个数组
+        // 文件切片大小5M
+        const maxSize = 1024 * 1024 * 5;
+        // 如果文件大小大于5M，则进行文件切片
+        if (file.size > maxSize) {
+          for (let i = 0; i < file.size; i += maxSize) {
+            fileArr.push(file.slice(i, i + maxSize));
+          }
+        } else {
+          fileArr.push(file);
+        }
+        fileHash = await hashFile(fileArr);
+        // 分片上传
+        await uploadFile(pendingChunks, fileHash, file.name);
+        // 文件全部上传成功
+        if (allSuccessful) {
+          // 合并分片
+          await mergeFile(fileHash, file.name);
+        } else {
+          uploadedChunks = await checkUploadedChunks(fileHash, file.name)
+        }
+      });
+    }
+    
+    // 初始化页面
+    async function init () {
+      // 查询已上传的分片
+      let uploadedChunks = await checkUploadedChunks(fileHash, file.name)
+      // 只上传未完成的分片
+      pendingChunks = fileArr.filter((_, index) => !uploadedChunks.includes(index));
+      // 如果有未上传的分片，则进行继续上传
+      if (pendingChunks.length > 0) {
+        upload()
+      }
+    }
+    // 计算文件hash值
+    function hashFile(fileArr) {
+      return new Promise((resolve) => {
+        const spark = new SparkMD5();
+        // 递归读取文件
+        function readFile(i) {
+          if (i >= fileArr.length) {
+            resolve(spark.end());
+            return
+          }
+          var blod = fileArr[i]
+          console.log('blod', blod);
+          var reader = new FileReader();
+          reader.onload = function(e) {
+            spark.append(e.target.result);
+            readFile(i + 1);
+          }
+          reader.readAsArrayBuffer(blod)
+        }
+        readFile(0);
+      });
+    }
+
+    // 查询已上传的分片
+    async function checkUploadedChunks(hash, fileName) {
+      let res = await axios.post(checkUrl, {fileName, hash})
+      return res.data.uploadedChunks || []
+    }
+
+    // 合并分片
+    async function mergeFile(hash, fileName) {
+      let res = await axios.post(mergeUrl, {hash, fileName})
+      console.log(res);
+    }
+
+    // 分片上传
+    function uploadFile(fileArr, hash, fileName) {
+      let taskArr = []
+      fileArr.forEach((item, index) => {
+        const formData = new FormData();
+        formData.append('file', item);
+        formData.append('hash', `${hash}-${index}-${fileName}`);
+        formData.append('fileName', fileName);
+        let task = axios.post(url, formData, {
+          Headers: {
+            'Content-Type': 'multipart/form-data'
+          }
+        })
+        taskArr.push(task)
+      });
+      Promise.allSettled(taskArr).then(res => {
+        allSuccessful = res.every(result => result.status === 'fulfilled')
+        if (allSuccessful) {
+          allSuccessful = true
+          console.log('文件上传成功');
+        } else {
+          allSuccessful = false
+          console.log('文件上传失败');
+        }
+      })
+    }
+  </script>
+</html>
