@@ -18,7 +18,7 @@
     // 文件是否全部上传成功
     let allSuccessful = false
     // 文件hash值数组
-    let fileHash
+    let fileHash = []
     // 文件对象
     var fileArr = [];
     // 未上传的分片
@@ -125,6 +125,7 @@
           console.log('文件上传成功');
         } else {
           allSuccessful = false
+          upload()
           console.log('文件上传失败');
         }
       })
